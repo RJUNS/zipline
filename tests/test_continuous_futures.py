@@ -56,6 +56,9 @@ class ContinuousFuturesTestCase(WithCreateBarData,
     START_DATE = pd.Timestamp('2015-01-05', tz='UTC')
     END_DATE = pd.Timestamp('2016-10-19', tz='UTC')
 
+    DATA_PORTAL_MINUTE_HISTORY_PREFETCH = 0
+    DATA_PORTAL_DAILY_HISTORY_PREFETCH = 0
+
     SIM_PARAMS_START = pd.Timestamp('2016-01-26', tz='UTC')
     SIM_PARAMS_END = pd.Timestamp('2016-01-28', tz='UTC')
     SIM_PARAMS_DATA_FREQUENCY = 'minute'
@@ -69,9 +72,9 @@ class ContinuousFuturesTestCase(WithCreateBarData,
     @classmethod
     def make_root_symbols_info(self):
         return pd.DataFrame({
-            'root_symbol': ['FO', 'BZ', 'MA', 'DF'],
-            'root_symbol_id': [1, 2, 3, 4],
-            'exchange': ['CME', 'CME', 'CME', 'CME']})
+            'root_symbol': ['FO', 'BZ', 'MA', 'DF', 'HG'],
+            'root_symbol_id': [1, 2, 3, 4, 5],
+            'exchange': ['CME', 'CME', 'CME', 'CME', 'CME']})
 
     @classmethod
     def make_futures_info(self):
@@ -208,7 +211,32 @@ class ContinuousFuturesTestCase(WithCreateBarData,
             'exchange': ['CME'] * 3,
         })
 
-        return pd.concat([fo_frame, bz_frame, ma_frame, df_frame])
+        hg_frame = DataFrame({
+            'symbol': ['HGG16', 'HGH16', 'HGJ16'],
+            'root_symbol': ['HG'] * 3,
+            'asset_name': ['Copper'] * 3,
+            'sid': range(20, 23),
+            'start_date': [Timestamp('2005-02-01', tz='UTC'),
+                           Timestamp('2005-03-01', tz='UTC'),
+                           Timestamp('2005-04-01', tz='UTC')],
+            'end_date': [Timestamp('2016-02-29', tz='UTC'),
+                         Timestamp('2016-03-31', tz='UTC'),
+                         Timestamp('2016-04-29', tz='UTC')],
+            'notice_date': [Timestamp('2016-01-29', tz='UTC'),
+                            Timestamp('2016-02-29', tz='UTC'),
+                            Timestamp('2016-03-31', tz='UTC')],
+            'expiration_date': [Timestamp('2016-02-29', tz='UTC'),
+                                Timestamp('2016-03-31', tz='UTC'),
+                                Timestamp('2016-04-29', tz='UTC')],
+            'auto_close_date': [Timestamp('2016-01-29', tz='UTC'),
+                                Timestamp('2016-02-29', tz='UTC'),
+                                Timestamp('2016-03-31', tz='UTC')],
+            'tick_size': [0.001] * 3,
+            'multiplier': [1000.0] * 3,
+            'exchange': ['CME'] * 3,
+        })
+
+        return pd.concat([fo_frame, bz_frame, ma_frame, df_frame, hg_frame])
 
     @classmethod
     def make_future_minute_bar_data(cls):
@@ -268,7 +296,7 @@ class ContinuousFuturesTestCase(WithCreateBarData,
             3: Timestamp('2016-04-20', tz='UTC'),
             6: Timestamp('2016-01-27', tz='UTC'),
         }
-        for i in range(20):
+        for i in range(23):
             df = base_df.copy()
             df += i * 10000
             if i in sid_to_vol_stop_session:
@@ -313,6 +341,12 @@ class ContinuousFuturesTestCase(WithCreateBarData,
                 df.volume.values[early_cross_1:early_cross_2] = 20
                 df.volume.values[early_cross_2:end_loc] = 10
                 df.volume.values[end_loc:] = 0
+            if i == 20:
+                df.volume.values[:] = 200
+            if i == 21:  # No volume for HGH16
+                df.volume.values[:] = 0
+            if i == 22:
+                df.volume.values[:] = 100
             yield i, df
 
     def test_double_volume_switch(self):
@@ -947,6 +981,30 @@ def record_current_contract(algo, data):
             window.loc['2016-03-28', cf],
             135441.440,
             err_msg="On session after roll, Should be FOJ16's 44th value.")
+
+    def test_history_close_session_end_of_window(self):
+        cf = self.data_portal.asset_finder.create_continuous_future(
+            'HG', 0, 'volume', None)
+
+        window = self.data_portal.get_history_window(
+            [cf.sid],
+            Timestamp('2016-01-29', tz='UTC'),
+            3, '1d', 'close', 'daily')
+
+        assert_almost_equal(
+            window.loc['2016-01-27', cf],
+            305021.44,
+            err_msg="")
+
+        assert_almost_equal(
+            window.loc['2016-01-28', cf],
+            305031.44,
+            err_msg="")
+
+        assert_almost_equal(
+            window.loc['2016-01-29', cf],
+            325041.44,
+            err_msg="")
 
     def test_history_close_session_skip_volume(self):
         cf = self.data_portal.asset_finder.create_continuous_future(

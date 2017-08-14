@@ -132,7 +132,8 @@ class RollFinder(with_metaclass(ABCMeta, object)):
                 session = prev
             curr = curr.prev
             if curr is not None:
-                session = curr.contract.auto_close_date + freq
+                session = min(session, curr.contract.auto_close_date + freq)
+
         return rolls
 
 
