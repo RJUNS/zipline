@@ -1418,6 +1418,14 @@ class RollFinderTestCase(WithBcolzFutureDailyBarReader, ZiplineTestCase):
                     'auto_close_date': cls.fifth_end_date - two_days,
                     'exchange': 'CME',
                 },
+                1005: {
+                    'symbol': 'CLM17',
+                    'root_symbol': 'CL',
+                    'start_date': cls.fifth_start_date,
+                    'end_date': cls.fifth_end_date,
+                    'auto_close_date': cls.fifth_end_date - two_days,
+                    'exchange': 'CME',
+                },
             },
             orient='index',
         )
@@ -1427,47 +1435,49 @@ class RollFinderTestCase(WithBcolzFutureDailyBarReader, ZiplineTestCase):
         """
         Volume data should look like this:
 
-                              CLF17    CLG17    CLH17    CLJ17    CLK17
-                2017-01-03     2000     1000        5        0        0
-                2017-01-04     2000     1000        5        0        0
-                    ...
-                2017-01-16     2000     1000        5        0        0
-                2017-01-17     2000     1000        5        0        0
-        ACD --> 2017-01-18     2000_    1000        5        0        0
-                2017-01-19     2000 `-> 1000        5        0        0
-                2017-01-20     2000     1000        5        0        0
-                2017-01-23        0     1000        5        0        0
-                    ...
-                2017-02-09        0     1000        5        0        0
-                2017-02-10        0     1000_    5000        0        0
-                2017-02-13        0     1000 `-> 5000        0        0
-                2017-02-14        0     1000     5000        0        0
-        ACD --> 2017-02-15        0     1000     5000        0        0
-                2017-02-16        0     1000     5000        0        0
-                2017-02-17        0     1000     5000        0        0
-                2017-02-20        0        0     5000        0        0
-                    ...
-                2017-03-10        0        0     5000        0        0
-                2017-03-13        0        0     5000     4000        0
-                2017-03-14        0        0     5000     4000        0
-        ACD --> 2017-03-15        0        0     5000_    4000     3000
-                2017-03-16        0        0     5000 `-> 4000     3000
-                2017-03-17        0        0     5000     4000     3000
-                2017-03-20        0        0        0     4000     3000
-                    ...
-                2017-04-14        0        0        0     4000     3000
-                2017-04-17        0        0        0     4000_    3000
-                2017-04-18        0        0        0        0 `-> 3000
-        ACD --> 2017-04-19        0        0        0        0     3000
-                2017-04-20        0        0        0        0     3000
-                2017-04-21        0        0        0        0     3000
+                          CLF17    CLG17    CLH17    CLJ17    CLK17    CLM17
+            2017-01-03     2000     1000        5        0        0        0
+            2017-01-04     2000     1000        5        0        0        0
+                ...
+            2017-01-16     2000     1000        5        0        0        0
+            2017-01-17     2000     1000        5        0        0        0
+    ACD --> 2017-01-18     2000_    1000        5        0        0        0
+            2017-01-19     2000 `-> 1000        5        0        0        0
+            2017-01-20     2000     1000        5        0        0        0
+            2017-01-23        0     1000        5        0        0        0
+                ...
+            2017-02-09        0     1000        5        0        0        0
+            2017-02-10        0     1000_    5000        0        0        0
+            2017-02-13        0     1000 `-> 5000        0        0        0
+            2017-02-14        0     1000     5000        0        0        0
+    ACD --> 2017-02-15        0     1000     5000        0        0        0
+            2017-02-16        0     1000     5000        0        0        0
+            2017-02-17        0     1000     5000        0        0        0
+            2017-02-20        0        0     5000        0        0        0
+                ...
+            2017-03-10        0        0     5000        0        0        0
+            2017-03-13        0        0     5000     4000        0        0
+            2017-03-14        0        0     5000     4000        0        0
+    ACD --> 2017-03-15        0        0     5000_    4000     3000     3500
+            2017-03-16        0        0     5000 `-> 4000     3000     3500
+            2017-03-17        0        0     5000     4000     3000     3500
+            2017-03-20        0        0        0     4000     3000     3500
+                ...
+            2017-04-14        0        0        0     4000     3000     3500
+            2017-04-17        0        0        0     4000_    3000     3500
+            2017-04-18        0        0        0        0 `-- 3000 --> 3500
+    ACD --> 2017-04-19        0        0        0        0     3000     3500
+            2017-04-20        0        0        0        0     3000     3500
+            2017-04-21        0        0        0        0     3000     3500
 
         The first roll occurs because we reach the auto close date of CLF17.
         The second roll occurs because the volume of CLH17 overtakes CLG17.
         The third roll is testing the fact that CLJ17 has no data in the grace
         period before CLH17's auto close date.
         The fourth roll is testing that we properly handle the case where a
-        contract's auto close date is *after* its end date.
+        contract's auto close date is *after* its end date. Also, CLK17 has
+        less volume than CLM17 on the roll date, so we skip over CLK17, and
+        roll directly to CLM17.
 
         A volume of zero here is used to represent the fact that a contract no
         longer exists.
@@ -1509,6 +1519,10 @@ class RollFinderTestCase(WithBcolzFutureDailyBarReader, ZiplineTestCase):
         # Make a copy because we are taking a slice of a data frame.
         fifth_contract_data = create_contract_data(3000)
         yield 1004, fifth_contract_data.copy().loc[cls.fifth_start_date:]
+
+        # Make a copy because we are taking a slice of a data frame.
+        sixth_contract_data = create_contract_data(3500)
+        yield 1005, sixth_contract_data.copy().loc[cls.fifth_start_date:]
 
     def test_volume_roll(self):
         """
@@ -1564,7 +1578,7 @@ class RollFinderTestCase(WithBcolzFutureDailyBarReader, ZiplineTestCase):
         )
 
     def test_end_before_auto_close(self):
-        # Test that we correctly roll from CLJ17 (1003) to CLK17 (1004) even
+        # Test that we correctly roll from CLJ17 (1003) to CLM17 (1005) even
         # though CLJ17 has an auto close date after its end date.
         rolls = self.volume_roll_finder.get_rolls(
             root_symbol='CL',
@@ -1577,7 +1591,29 @@ class RollFinderTestCase(WithBcolzFutureDailyBarReader, ZiplineTestCase):
             [
                 (1002, pd.Timestamp('2017-03-16', tz='UTC')),
                 (1003, pd.Timestamp('2017-04-18', tz='UTC')),
-                (1004, None),
+                (1005, None),
+            ],
+        )
+
+    def test_roll_window_ends_on_auto_close(self):
+        """
+        Test that when skipping over a low volume contract (CLK17), we use the
+        correct roll date for the previous contract (CLJ17) when that
+        contract's auto close date falls on the end date of the roll window.
+        """
+        rolls = self.volume_roll_finder.get_rolls(
+            root_symbol='CL',
+            start=self.fourth_start_date,
+            end=self.fourth_auto_close_date,
+            offset=0,
+        )
+
+        self.assertEqual(
+            rolls,
+            [
+                (1002, pd.Timestamp('2017-03-16', tz='UTC')),
+                (1003, pd.Timestamp('2017-04-18', tz='UTC')),
+                (1005, None),
             ],
         )
 
